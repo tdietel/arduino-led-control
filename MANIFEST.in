@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include arduino_led_control/firmware *.ino *.hex *.bin
+recursive-include docs *.md
+recursive-include tests *.py
