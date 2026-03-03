@@ -45,6 +45,7 @@ Issues = "https://github.com/tdietel/arduino-led-control/issues"
 [tool.setuptools]
 packages = ["arduino_led_control"]
 include-package-data = true
+script-files = ["scripts/upload_firmware.py"]
 
 [tool.setuptools.package-data]
 arduino_led_control = ["firmware/*.hex", "firmware/*.bin"]
