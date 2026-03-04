@@ -1,26 +1,57 @@
 """Arduino controller module for serial communication with Arduino devices."""
 
+from __future__ import annotations
+
 import serial
-import time
 from typing import Optional
+from serial.tools import list_ports
 
 
 class ArduinoController:
     """Control LED and other components on Arduino devices via serial communication."""
     
-    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 1.0):
+    def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout: float = 1.0):
         """Initialize Arduino controller.
         
         Args:
-            port: Serial port (e.g., '/dev/ttyUSB0' or 'COM3')
+            port: Serial port (e.g., '/dev/ttyUSB0' or 'COM3'). If omitted,
+                auto-detection is used.
             baudrate: Serial communication speed (default: 115200)
             timeout: Serial read timeout in seconds (default: 1.0)
         """
-        self.port = port
+        self.port = port or self.auto_detect_port()
         self.baudrate = baudrate
         self.timeout = timeout
         self.serial: Optional[serial.Serial] = None
+
         self.connect()
+
+    @staticmethod
+    def list_serial_ports() -> list[str]:
+        """Return available serial device names."""
+        return [p.device for p in list_ports.comports()]
+
+    @classmethod
+    def auto_detect_port(cls) -> str:
+        """Auto-detect a likely Arduino serial port using pyserial."""
+        ports = cls.list_serial_ports()
+        if not ports:
+            raise serial.SerialException("No serial ports found. Connect your Arduino and try again.")
+
+        patterns = ['/dev/cu.usbserial', 'COM']
+
+        for port in ports:
+            p = port.lower()
+            for pattern in patterns:
+                if p.startswith(pattern.lower()):
+                    return port
+
+        return NULL
+
+    @classmethod
+    def detect(cls, baudrate: int = 115200, timeout: float = 1.0) -> "ArduinoController":
+        """Create a controller using auto-detected serial port."""
+        return cls(port=None, baudrate=baudrate, timeout=timeout)
     
     def connect(self) -> bool:
         """Connect to Arduino device.
@@ -44,6 +75,10 @@ class ArduinoController:
         """Disconnect from Arduino device."""
         if self.serial and self.serial.is_open:
             self.serial.close()
+
+    def close(self) -> None:
+        """Alias for disconnect()."""
+        self.disconnect()
     
     def is_connected(self) -> bool:
         """Check if connected to Arduino.
@@ -104,6 +139,7 @@ class ArduinoController:
         
         try:
             self.serial.write(f"{command}\n".encode())
+            # print(self.read_response())
             return True
         except serial.SerialException as e:
             print(f"Error sending command: {e}")
