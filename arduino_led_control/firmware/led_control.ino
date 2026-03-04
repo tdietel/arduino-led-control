@@ -90,8 +90,7 @@ void processCommand(String command) {
       int pin = params.toInt();
       pinMode(pin, OUTPUT);
       digitalWrite(pin, HIGH);
-      Serial.println("OK:LED_ON");
-      
+      Serial.println("OK:LED_ON"); 
     } else if (action == "LED_OFF") {
       int pin = params.toInt();
       digitalWrite(pin, LOW);
