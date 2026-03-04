@@ -5,8 +5,8 @@ running the LED control firmware.
 """
 
 __version__ = "0.1.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__author__ = "Thomas Dietel"
+__email__ = "tom@dietel.net"
 
 from .controller import ArduinoController
 

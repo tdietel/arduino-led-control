@@ -26,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "pyserial>=3.5",
+    "click>=8.0",
 ]
 
 [project.optional-dependencies]
@@ -42,13 +43,15 @@ Documentation = "https://github.com/tdietel/arduino-led-control#readme"
 Repository = "https://github.com/tdietel/arduino-led-control.git"
 Issues = "https://github.com/tdietel/arduino-led-control/issues"
 
+[project.scripts]
+ledcontrol = "arduino_led_control.cli:main"
+
 [tool.setuptools]
 packages = ["arduino_led_control"]
 include-package-data = true
-script-files = ["scripts/upload_firmware.py"]
 
 [tool.setuptools.package-data]
-arduino_led_control = ["firmware/*.hex", "firmware/*.bin"]
+arduino_led_control = ["firmware/*.ino", "firmware/*.hex", "firmware/*.bin"]
 
 [tool.black]
 line-length = 100

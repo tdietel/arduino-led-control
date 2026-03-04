@@ -8,18 +8,19 @@ from typing import Optional
 class ArduinoController:
     """Control LED and other components on Arduino devices via serial communication."""
     
-    def __init__(self, port: str, baudrate: int = 9600, timeout: float = 1.0):
+    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 1.0):
         """Initialize Arduino controller.
         
         Args:
             port: Serial port (e.g., '/dev/ttyUSB0' or 'COM3')
-            baudrate: Serial communication speed (default: 9600)
+            baudrate: Serial communication speed (default: 115200)
             timeout: Serial read timeout in seconds (default: 1.0)
         """
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
         self.serial: Optional[serial.Serial] = None
+        self.connect()
     
     def connect(self) -> bool:
         """Connect to Arduino device.
@@ -33,7 +34,7 @@ class ArduinoController:
                 baudrate=self.baudrate,
                 timeout=self.timeout
             )
-            time.sleep(2)  # Wait for Arduino to initialize
+            # time.sleep(2)  # Wait for Arduino to initialize
             return True
         except serial.SerialException as e:
             print(f"Failed to connect to Arduino: {e}")
