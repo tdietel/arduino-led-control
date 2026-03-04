@@ -31,6 +31,9 @@ String inputBuffer = "";
 const char COMMAND_DELIM = ':';
 const char LINE_ENDING = '\n';
 
+void setupTimer1();
+void interruptHandler();
+
 void setup() {
   // Initialize serial communication
   Serial.begin(BAUD_RATE);
@@ -40,7 +43,7 @@ void setup() {
   digitalWrite(12, HIGH);
   
   // Configure Timer1 for pulse generation
-  // initTimer1();
+  setupTimer1();
   
   // Startup signal
   Serial.println("READY");
@@ -94,11 +97,42 @@ void processCommand(String command) {
     } else if (action == "LED_OFF") {
       int pin = params.toInt();
       digitalWrite(pin, LOW);
-      Serial.println("OK:LED_OFF");      
+      Serial.println("OK:LED_OFF");
+    } else if (action == "STROBE_START") {
+
     } else {
       Serial.println("ERROR:Unknown command");
     }
   }
+}
+
+void setupTimer1() {
+  cli();
+
+  // Stop Timer1 while configuring.
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1 = 0;
+
+  // Configure Timer1 in CTC mode (WGM12=1), no prescaler (CS10=1).
+  TCCR1B = (1 << WGM12) | (1 << CS10);
+
+  // Compare value for interrupt rate derived from `pulseDelay`.
+  // Keep formula from current sketch behavior.
+  OCR1A = F_CPU / (2 * pulseDelay);
+
+  // Enable Timer1 compare match A interrupt.
+  TIMSK1 = (1 << OCIE1A);
+
+  sei();
+}
+
+ISR(TIMER1_COMPA_vect) {
+  interruptHandler();
+}
+
+void interruptHandler() {
+  // Intentionally empty for now.
 }
 
 /**
