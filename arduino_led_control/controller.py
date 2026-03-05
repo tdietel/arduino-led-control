@@ -110,21 +110,7 @@ class ArduinoController:
             True if command sent successfully, False otherwise
         """
         return self._run_command(f"LED_OFF:{pin}")
-    
-    def set_brightness(self, pin: int, value: int) -> bool:
-        """Set LED brightness using PWM.
         
-        Args:
-            pin: LED pin number
-            value: Brightness value (0-255)
-        
-        Returns:
-            True if command sent successfully, False otherwise
-        """
-        if not 0 <= value <= 255:
-            raise ValueError("Brightness value must be between 0 and 255")
-        return self._run_command(f"BRIGHTNESS:{pin}:{value}")
-    
     def start_strobe(self, pulse_width_clk: int) -> bool:
         """Start strobe effect on LED.
         
@@ -142,7 +128,29 @@ class ArduinoController:
         #     raise ValueError("Pulse width must be positive")
         
         # pulse_width_clk = int(pulse_width_us * (F_CPU / 1_000_000))
-        return self._run_command(f"STROBE_START:{pulse_width_clk}")
+        self._run_command(f"STROBE_START_SINGLE:{pulse_width_clk}")
+
+    def start_double_strobe(self, pulse_width_clk: int, pulse_gap_clk: int, pulse_width2_clk: int) -> bool:
+        """Start double strobe effect on LED.
+        
+        Args:
+            pin: LED pin number
+            frequency: Strobe frequency in Hz
+            pulse_width_clk: Pulse width in clock cycles
+            pulse_gap_clk: Gap between pulses in clock cycles
+        
+        Returns:
+            True if command sent successfully, False otherwise
+        """
+        self._run_command(f"STROBE_START_DOUBLE:{pulse_width_clk}:{pulse_gap_clk}:{pulse_width2_clk}")
+
+    def stop_strobe(self) -> bool:
+        """Stop strobe effect on LED.
+        
+        Returns:
+            True if command sent successfully, False otherwise
+        """
+        return self._run_command("STROBE_STOP")
 
     def _run_command(self, command: str) -> bool:
         """Send command to Arduino.

@@ -13,20 +13,14 @@
 // const int LED_PIN = 13;
 const long BAUD_RATE = 115200;
 
-// Timer1 configuration (16-bit timer, ATmega328P/2560)
 volatile uint16_t pulseDelay = 2;           // Hz (default 1kHz)
 volatile uint8_t  pulsePattern = 1;         // 0: off, 1: single, 2: double
 volatile uint8_t  pulsePort = 0;            // Port number for pulse generation (0=PORTB, 1=PORTC, 2=PORTD)
 volatile uint8_t  pulsePin = 0;             // Bit mask for the pin to toggle
-volatile uint16_t pulseWidth = 0;       // Pulse width in microseconds (default 100us)
+volatile uint16_t pulseWidth = 0;           // Pulse width in clock cycles (1 cycle = 62.5 ns at 16 MHz)
+volatile uint16_t pulseGap = 0;             // Gap between pulses for double pulse mode
+volatile uint16_t pulseWidth2 = 0;          // Width of second pulse in double pulse mode
 
-// volatile boolean  timerEnabled = false;
-// volatile uint32_t pulseCount = 0;
-
-// Port control for assembler-based pulse generation
-// volatile uint8_t portAddress = 0x05;       // PORTB
-// volatile uint8_t portMaskOn  = 0x30;       // Pin 13 (bit 5) - internal LED
-// volatile uint8_t portMaskOff = 0x00;       // Mask to clear (usually 0 = set bits to 0)
 
 // Variables
 String inputBuffer = "";
@@ -36,9 +30,9 @@ const char LINE_ENDING = '\n';
 // void setupTimer1();
 // void interruptHandler();
 
-void startStrobe(uint16_t width);
+void startStrobe();
 void stopStrobe();
-void generateSinglePulse(uint16_t width);
+void generate_single_pulse(uint16_t width);
 void generate_single_pulse_clk(uint16_t width);
 void generate_single_pulse_(uint8_t steps);
 
@@ -64,87 +58,62 @@ void setup() {
 void loop() {
   // Check for incoming serial data
   if (Serial.available() > 0) {
-    char c = Serial.read();
     
-    if (c == LINE_ENDING) {
-      // Process complete command
-      processCommand(inputBuffer);
-      inputBuffer = "";
-    } else if (c != '\r') {
-      // Accumulate command (ignore carriage returns)
-      inputBuffer += c;
-    }
-  }
-}
+    char line[64];
+    int pin, width, gap, width2;
 
-/**
- * Process incoming command
- * 
- * Supported commands:
- * - LED_ON:pin     : Turn on LED at pin
- * - LED_OFF:pin    : Turn off LED at pin
- * - BRIGHTNESS:pin:value : Set PWM brightness (0-255)
- */
-void processCommand(String command) {
-  if (command.length() == 0) {
-    return;
-  }
-  
-  // Parse command
-  int firstColon = command.indexOf(COMMAND_DELIM);
-  
-  if (firstColon == -1) {
-    // No parameters
-    handleSimpleCommand(command);
-  } else {
-    // Commands with parameters
-    String action = command.substring(0, firstColon);
-    String params = command.substring(firstColon + 1);
-    
-    if (action == "LED_ON") {
-      int pin = params.toInt();
-      pinMode(pin, OUTPUT);
-      digitalWrite(pin, HIGH);
-      Serial.println("OK:LED_ON"); 
-    } else if (action == "LED_OFF") {
-      int pin = params.toInt();
-      digitalWrite(pin, LOW);
-      Serial.println("OK:LED_OFF");
-    } else if (action == "STROBE_START") {
-      int width = params.toInt();
-      startStrobe(width);
-      Serial.println("OK:STROBE_START");
-    } else if (action == "STROBE_STOP") {
-      stopStrobe();
-      Serial.println("OK:STROBE_STOP");
-    } else {
-      Serial.println("ERROR:Unknown command");
-    }
-  }
-}
+    size_t n = Serial.readBytesUntil('\n', line, sizeof(line)-1);
+    line[n] = '\0';   // terminate
 
-/**
- * Handle simple commands without parameters
- */
-void handleSimpleCommand(String command) {
-  if (command == "PING") {
-    Serial.println("PONG");
-  } else if (command == "STATUS") {
-    Serial.println("STATUS:OK");
-  } else if (command == "READVI") {
+    if (strncmp(line, "PING", 4) == 0) {
+      Serial.println("PONG");
+
+    } else if (strncmp(line, "STATUS", 6) == 0) {
+      Serial.println("STATUS:OK");
+
+    } else if (strncmp(line, "READVI", 6) == 0) {
       float voltage = ina219.getBusVoltage_V();
       float current = ina219.getCurrent_mA();
       Serial.print("OK:READVI:");
       Serial.print(voltage, 3);
       Serial.print(":");
       Serial.println(current, 3);
-  } else {
-    Serial.println("ERROR:Unknown command");
+
+    } else if (sscanf(line, "LED_ON:%i", &pin) == 1) {
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, HIGH);
+      Serial.println("OK:LED_ON");
+
+    } else if (sscanf(line, "LED_OFF:%i", &pin) == 1) {
+      digitalWrite(pin, LOW);
+      Serial.println("OK:LED_OFF"); 
+
+    } else if (sscanf(line, "STROBE_START_SINGLE:%d", &width) == 1) {
+      pulsePattern = 1;
+      pulseWidth = width;
+      startStrobe();
+      Serial.println("OK:STROBE_START_SINGLE");
+
+    } else if (sscanf(line, "STROBE_START_DOUBLE:%d:%d:%d", &width, &gap, &width2) == 3) {
+      pulsePattern = 2;
+      pulseWidth = width;
+      pulseGap = gap;
+      pulseWidth2 = width2;
+      startStrobe();
+      Serial.println("OK:STROBE_START_DOUBLE");
+
+    } else if (strncmp(line, "STROBE_STOP", 11) == 0) {
+      stopStrobe();
+      Serial.println("OK:STROBE_STOP");
+
+    } else {
+      Serial.println("ERROR:Unknown command");
+    }
   }
 }
 
-void startStrobe(uint16_t width) {
-  pulseWidth = width;
+
+void startStrobe() {
   cli();
 
   // Stop Timer1 while configuring.
@@ -153,7 +122,7 @@ void startStrobe(uint16_t width) {
   TCNT1 = 0;
 
   // Configure Timer1 in CTC mode (WGM12=1), no prescaler (CS10=1).
-  TCCR1B = (1 << WGM12) | (1 << CS12);
+  TCCR1B = (1 << WGM12) | (1 << CS10);
 
   // Compare value for interrupt rate derived from `pulseDelay`.
   // Keep formula from current sketch behavior.
@@ -176,24 +145,19 @@ void stopStrobe() {
 ISR(TIMER1_COMPA_vect) {
   switch(pulsePattern) {
     case 1: // Single pulse
-      generateSinglePulse(pulseWidth);
+      generate_single_pulse(pulseWidth);
       break;
-          
-    // case 2: // Double pulse
-    //   for (int i = 0; i < 2; i++) {
-    //     PORTB |= (1 << 5);  // Set pin high
-    //     delayMicroseconds(100); // Short pulse duration
-    //     PORTB &= ~(1 << 5); // Set pin low
-    //     delayMicroseconds(100); // Short gap between pulses
-    //   }
-    //   break;
+
+    case 2: // Double pulse
+      generate_double_pulse(pulseWidth, pulseGap, pulseWidth2);
+      break;
       
     default: // No pulse
       break;
   }
 }
 
-void generateSinglePulse(uint16_t width) {
+void generate_single_pulse(uint16_t width) {
 
   if (width == 0) {
     return;
@@ -209,6 +173,56 @@ void generateSinglePulse(uint16_t width) {
   }
 }
 
+void generate_double_pulse(uint8_t width1, uint8_t gap, uint8_t width2) {
+  // This function is only implemented with 250ns accuracy using Timer2, so steps should be between 1 and 15 (4 to 60 cycles)
+
+  // // Save current Timer2 settings
+  // uint8_t oldTCCR2A = TCCR2A;
+  // uint8_t oldTCCR2B = TCCR2B;
+  // uint8_t oldTCNT2  = TCNT2;
+
+  // // Stop Timer2
+  // TCCR2B = 0;
+  // // Set Timer2 to normal mode, no prescaler
+  // TCCR2A = 0;
+  // TCCR2B = (1 << CS20); // prescaler = 1
+  // TCNT2 = 0;
+
+  volatile uint16_t w1 = width1 / 4;
+  volatile uint16_t g = gap / 4;
+  volatile uint16_t w2 = width2 / 4;
+
+  cli();
+  __asm__ __volatile__ (
+    "movw r24, %[w1]\n"   // load width into r24:r25
+    "movw r26, %[g]\n"  // load gap into r26:r27
+    "movw r30, %[w2]\n"   // load width2 into r30:r31
+    "sbi %[port], %[bit]\n\t"
+    "loopA:\n"
+        "sbiw r24, 1\n"
+        "brne loopA\n"
+    "cbi %[port], %[bit]\n\t"
+    "loopB:\n"
+        "sbiw r26, 1\n"
+        "brne loopB\n"
+    "sbi %[port], %[bit]\n\t"
+    "loopC:\n"
+        "sbiw r30, 1\n"
+        "brne loopC\n"
+    "cbi %[port], %[bit]\n\t"
+    :
+    : [port] "I" (_SFR_IO_ADDR(PORTB)), [bit] "I" (4)
+    , [w1] "r" (w1), [g] "r" (g), [w2] "r" (w2)
+    : "r24", "r25", "r26", "r27", "r30", "r31"
+  );
+  sei();
+
+  // // Restore Timer2 settings
+  // TCCR2A = oldTCCR2A;
+  // TCCR2B = oldTCCR2B;
+  // TCNT2  = oldTCNT2;
+}
+
 void generate_single_pulse_clk(uint16_t width) {
   cli();
 
@@ -216,19 +230,9 @@ void generate_single_pulse_clk(uint16_t width) {
     case 0:
       break;
 
-    case 1:
-      __asm__ __volatile__(
-        "sbi %[port], %[pin]\n\t" 
-        "cbi %[port], %[pin]\n\t"
-        :
-        : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
-      );
-      break;
-
     case 2:
       __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t" 
-        "nop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
@@ -238,6 +242,16 @@ void generate_single_pulse_clk(uint16_t width) {
     case 3:
       __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t" 
+        "nop\n\t"
+        "cbi %[port], %[pin]\n\t"
+        :
+        : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
+      );
+      break;
+
+    case 4:
+      __asm__ __volatile__(
+        "sbi %[port], %[pin]\n\t" 
         "nop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
@@ -245,7 +259,7 @@ void generate_single_pulse_clk(uint16_t width) {
       );
       break;
    
-    case 4:
+    case 5:
       __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t" 
         "nop\n\tnop\n\tnop\n\t"
@@ -255,7 +269,7 @@ void generate_single_pulse_clk(uint16_t width) {
       );
       break;
 
-      case 5:
+      case 6:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\t"
@@ -264,7 +278,7 @@ void generate_single_pulse_clk(uint16_t width) {
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
-      case 6:
+      case 7:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
@@ -273,7 +287,7 @@ void generate_single_pulse_clk(uint16_t width) {
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
-      case 7:
+      case 8:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
@@ -282,7 +296,7 @@ void generate_single_pulse_clk(uint16_t width) {
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
-      case 8:
+      case 9:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
@@ -291,7 +305,7 @@ void generate_single_pulse_clk(uint16_t width) {
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
-      case 9:
+      case 10:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
@@ -300,19 +314,10 @@ void generate_single_pulse_clk(uint16_t width) {
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
-      case 10:
-        __asm__ __volatile__(
-        "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
-        "cbi %[port], %[pin]\n\t"
-        :
-        : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
-        );
-        break;
       case 11:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
@@ -330,7 +335,7 @@ void generate_single_pulse_clk(uint16_t width) {
       case 13:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
@@ -339,13 +344,22 @@ void generate_single_pulse_clk(uint16_t width) {
       case 14:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
         );
         break;
       case 15:
+        __asm__ __volatile__(
+        "sbi %[port], %[pin]\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "cbi %[port], %[pin]\n\t"
+        :
+        : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
+        );
+        break;
+      case 16:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
         "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
@@ -370,6 +384,27 @@ void generate_single_pulse_clk(uint16_t width) {
 }
 
 void generate_single_pulse_250ns(uint8_t steps) {
+
+  volatile uint16_t width = steps / 4;
+
+  cli();
+  __asm__ __volatile__ (
+    "movw r24, %[width]\n"   // load width into r24:r25
+    "sbi %[port], %[bit]\n\t"
+    "loop:\n"
+        "sbiw r24, 1\n"
+        "brne loop\n"
+    "cbi %[port], %[bit]\n\t"
+    :
+    : [port] "I" (_SFR_IO_ADDR(PORTB)), [bit] "I" (4), [width] "r" (width)
+    : "r24", "r25"
+  );
+  sei();
+
+}
+
+void old_generate_single_pulse_250ns(uint8_t steps) {
+ 
   // Save current Timer2 settings
   uint8_t oldTCCR2A = TCCR2A;
   uint8_t oldTCCR2B = TCCR2B;
@@ -394,7 +429,7 @@ void generate_single_pulse_250ns(uint8_t steps) {
     "cbi %[port], %[bit]\n\t"
     :
     : [port] "I" (_SFR_IO_ADDR(PORTB)), [bit] "I" (4), [tcnt2] "m" (TCNT2), [target] "r" (target)
-    : "r24"
+    : "r24", "r25"
   );
 
   // Restore Timer2 settings

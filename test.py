@@ -16,9 +16,13 @@ except TimeoutError:
 led.led_on(pin=12)
 sleep(1)
 
-v, i = led.read_voltage_current()
-print(f"Voltage: {v} V, Current: {i} mA")
+# v, i = led.read_voltage_current()
+# print(f"Voltage: {v} V, Current: {i} mA")
 
+# led.led_off(pin=12)
+# sleep(1)
+
+# led.start_strobe(pulse_width_clk=63)
 
 # sleep(10e-3)
 # print(led.read_response())
@@ -29,8 +33,24 @@ print(f"Voltage: {v} V, Current: {i} mA")
 # sleep(1)
 # print(led.read_response())
 
-# while True:
-#     for w in [1, 4, 16, 32, 63]:
-#         print(f"Generating single pulse with width {w} clock cycles...")
-#         led.start_strobe(pulse_width_clk=w)
-#         sleep(0.5)
+while True:
+    cmd = input("Command (o/on=on, f/off=off, <num>=pulse, d/double=double pulse q=quit): ").strip().lower()
+    if cmd in ("q", "quit", "exit"):
+        break
+    elif cmd in ("o", "on"):
+        led.led_on(pin=12)
+    elif cmd in ("f", "off"):
+        led.led_off(pin=12)
+    elif cmd in ("d", "double"):
+        led.start_double_strobe(pulse_width_clk=80, pulse_gap_clk=16, pulse_width2_clk=96)
+    elif cmd.isdigit():
+        width = int(cmd)
+        print(f"Generating single pulse with width {width} clock cycles...")
+        led.start_strobe(pulse_width_clk=width)
+    else:
+        print("Unknown command.")
+
+    # for w in [1, 4, 16, 32, 63]:
+    #     print(f"Generating single pulse with width {w} clock cycles...")
+    #     led.start_strobe(pulse_width_clk=w)
+    #     sleep(2)
