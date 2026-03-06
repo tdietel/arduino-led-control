@@ -152,6 +152,9 @@ class ArduinoController:
         """
         return self._run_command("STROBE_STOP")
 
+    def set_strobe_frequency(self, frequency: float):
+        self._run_command(f"SET_STROBE_FREQ:{frequency}")
+
     def _run_command(self, command: str) -> bool:
         """Send command to Arduino.
         

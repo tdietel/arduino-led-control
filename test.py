@@ -43,6 +43,10 @@ while True:
         led.led_off(pin=12)
     elif cmd in ("d", "double"):
         led.start_double_strobe(pulse_width_clk=80, pulse_gap_clk=16, pulse_width2_clk=96)
+    elif cmd in ("-"):
+        led.set_strobe_frequency(100)
+    elif cmd in ("+"):
+        led.set_strobe_frequency(10000)
     elif cmd.isdigit():
         width = int(cmd)
         print(f"Generating single pulse with width {width} clock cycles...")

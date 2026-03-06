@@ -13,7 +13,7 @@
 // const int LED_PIN = 13;
 const long BAUD_RATE = 115200;
 
-volatile uint16_t pulseDelay = 2;           // Hz (default 1kHz)
+float             pulseFreq = 1000.;        // Frequency of pulse generation
 volatile uint8_t  pulsePattern = 1;         // 0: off, 1: single, 2: double
 volatile uint8_t  pulsePort = 0;            // Port number for pulse generation (0=PORTB, 1=PORTC, 2=PORTD)
 volatile uint8_t  pulsePin = 0;             // Bit mask for the pin to toggle
@@ -60,7 +60,7 @@ void loop() {
   if (Serial.available() > 0) {
     
     char line[64];
-    int pin, width, gap, width2;
+    int pin, width, gap, width2, freq;
 
     size_t n = Serial.readBytesUntil('\n', line, sizeof(line)-1);
     line[n] = '\0';   // terminate
@@ -94,6 +94,10 @@ void loop() {
       startStrobe();
       Serial.println("OK:STROBE_START_SINGLE");
 
+    } else if (sscanf(line, "SET_STROBE_FREQ:%i", &freq) == 1) {
+      pulseFreq = float(freq);
+      Serial.println("OK:SET_STROBE_FREQ");
+
     } else if (sscanf(line, "STROBE_START_DOUBLE:%d:%d:%d", &width, &gap, &width2) == 3) {
       pulsePattern = 2;
       pulseWidth = width;
@@ -107,7 +111,7 @@ void loop() {
       Serial.println("OK:STROBE_STOP");
 
     } else {
-      Serial.println("ERROR:Unknown command");
+      Serial.println("ERROR:Unknown command: " + String(line));
     }
   }
 }
@@ -121,12 +125,18 @@ void startStrobe() {
   TCCR1B = 0;
   TCNT1 = 0;
 
-  // Configure Timer1 in CTC mode (WGM12=1), no prescaler (CS10=1).
-  TCCR1B = (1 << WGM12) | (1 << CS10);
+  // Configure Timer1 in CTC mode (WGM12=1), prescaler = 64
+  int prescaler = 64;
+  TCCR1B = (1 << WGM12) | (1 << CS11) | (1 << CS10);
+
+  // // Configure Timer1 in CTC mode (WGM12=1), no prescaler (CS10=1).
+  // int prescaler = 1;
+  // TCCR1B = (1 << WGM12) | (1 << CS10);
 
   // Compare value for interrupt rate derived from `pulseDelay`.
   // Keep formula from current sketch behavior.
-  OCR1A = F_CPU / (2 * pulseDelay);
+  // OCR1A = F_CPU / (2 * pulseFreq);
+  OCR1A = (F_CPU / (prescaler * pulseFreq)) - 1;
 
   // Enable Timer1 compare match A interrupt.
   TIMSK1 = (1 << OCIE1A);
