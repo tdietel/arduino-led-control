@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import wraps
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -67,7 +68,7 @@ def cli() -> None:
     default=None,
     help="Serial port (auto-detected if omitted)",
 )
-def firmware_upload(sketch: Path | None, fqbn: str, port: str | None) -> None:
+def firmware_upload(sketch: Optional[Path], fqbn: str, port: Optional[str]) -> None:
     """Compile and upload Arduino firmware."""
     if not check_arduino_cli():
         click.echo("arduino-cli not found. Install it first (e.g. brew install arduino-cli).", err=True)

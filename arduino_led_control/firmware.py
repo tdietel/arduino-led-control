@@ -7,9 +7,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import List
 
 
-def run_cmd(cmd: list[str]) -> None:
+def run_cmd(cmd: List[str]) -> None:
     result = subprocess.run(cmd, text=True)
     if result.returncode != 0:
         raise SystemExit(result.returncode)

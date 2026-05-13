@@ -4,7 +4,13 @@ This module provides Python interface to communicate with Arduino devices
 running the LED control firmware.
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("arduino-led-control")
+except PackageNotFoundError:
+    # Source tree import before installation.
+    __version__ = "0+unknown"
 __author__ = "Thomas Dietel"
 __email__ = "tom@dietel.net"
 

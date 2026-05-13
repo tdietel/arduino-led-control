@@ -29,7 +29,7 @@ pip install -e .
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.9+
 - pyserial
 - Arduino device with compatible sketch
 

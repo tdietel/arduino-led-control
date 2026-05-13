@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import serial
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from serial.tools import list_ports
 import time
 
@@ -28,7 +28,7 @@ class ArduinoController:
         self.connect()
 
     @staticmethod
-    def list_serial_ports() -> list[str]:
+    def list_serial_ports() -> List[str]:
         """Return available serial device names."""
         return [p.device for p in list_ports.comports()]
 
