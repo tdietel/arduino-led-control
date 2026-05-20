@@ -336,7 +336,7 @@ void generate_single_pulse_clk(uint16_t width) {
       case 12:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
@@ -354,7 +354,7 @@ void generate_single_pulse_clk(uint16_t width) {
       case 14:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
@@ -363,7 +363,7 @@ void generate_single_pulse_clk(uint16_t width) {
       case 15:
         __asm__ __volatile__(
         "sbi %[port], %[pin]\n\t"
-        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+        "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
         "cbi %[port], %[pin]\n\t"
         :
         : [port] "I" (_SFR_IO_ADDR(PORTB)), [pin] "I" (4)
