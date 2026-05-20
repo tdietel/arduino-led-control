@@ -38,8 +38,10 @@ while True:
     if cmd in ("q", "quit", "exit"):
         break
     elif cmd in ("o", "on"):
+        led.stop_strobe()
         led.led_on(pin=12)
     elif cmd in ("f", "off"):
+        led.stop_strobe()
         led.led_off(pin=12)
     elif cmd in ("d", "double"):
         led.start_double_strobe(pulse_width_clk=80, pulse_gap_clk=16, pulse_width2_clk=96)
