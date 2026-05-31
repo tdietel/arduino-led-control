@@ -39,15 +39,15 @@ class ArduinoController:
         if not ports:
             raise serial.SerialException("No serial ports found. Connect your Arduino and try again.")
 
-        patterns = ['/dev/cu.usbserial', 'COM']
+        patterns = ['/dev/cu.usbserial', '/dev/ttyusb', '/dev/ttyacm', 'com']
 
         for port in ports:
             p = port.lower()
             for pattern in patterns:
-                if p.startswith(pattern.lower()):
+                if p.startswith(pattern):
                     return port
 
-        return NULL
+        return ports[0]
 
     @classmethod
     def detect(cls, baudrate: int = 115200, timeout: float = 1.0) -> "ArduinoController":
