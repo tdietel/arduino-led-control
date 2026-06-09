@@ -60,24 +60,18 @@ class BuildWithArduino(build_py):
                     cwd=os.path.dirname(__file__),
                 )
 
-            if result.returncode != 0:
-                print(f"Warning: Arduino compilation failed: {result.stderr}")
-            else:
-                print("Arduino sketch compiled successfully")
-                
-                # Copy compiled files to firmware directory
-                hex_file = os.path.join(build_dir, "led_control.ino.hex")
-                bin_file = os.path.join(build_dir, "led_control.ino.bin")
-                
-                if os.path.exists(hex_file):
-                    dest_hex = os.path.join(sketch_dir, "led_control.hex")
-                    shutil.copy(hex_file, dest_hex)
-                    print(f"Compiled sketch (.hex) copied to {dest_hex}")
-                
-                if os.path.exists(bin_file):
-                    dest_bin = os.path.join(sketch_dir, "led_control.bin")
-                    shutil.copy(bin_file, dest_bin)
-                    print(f"Compiled sketch (.bin) copied to {dest_bin}")
+                if result.returncode != 0:
+                    print(f"Warning: Arduino compilation failed:\n{result.stderr}")
+                else:
+                    print("Arduino sketch compiled successfully")
+
+                    # Copy compiled files before the temp dir is cleaned up
+                    for ext, src_name in [(".hex", "led_control.ino.hex"), (".bin", "led_control.ino.bin")]:
+                        src = os.path.join(build_dir, src_name)
+                        if os.path.exists(src):
+                            dest = os.path.join(sketch_dir, f"led_control{ext}")
+                            shutil.copy(src, dest)
+                            print(f"Copied {src_name} -> {dest}")
         except FileNotFoundError:
             print("Warning: arduino-cli not found. Skipping Arduino compilation.")
             print("Install with: brew install arduino-cli")

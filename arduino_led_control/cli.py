@@ -68,7 +68,7 @@ def cli() -> None:
     default=None,
     help="Serial port (auto-detected if omitted)",
 )
-def firmware_upload(sketch: Optional[Path], fqbn: str, port: Optional[str]) -> None:
+def flash(sketch: Optional[Path], fqbn: str, port: Optional[str]) -> None:
     """Compile and upload Arduino firmware."""
     if not check_arduino_cli():
         click.echo("arduino-cli not found. Install it first (e.g. brew install arduino-cli).", err=True)
@@ -100,43 +100,45 @@ def firmware_upload(sketch: Optional[Path], fqbn: str, port: Optional[str]) -> N
 
 
 @cli.command()
-@click.option(
-    "--pin",
-    type=int,
-    default=13,
-    help="Arduino pin number (default: 13)",
-)
 @serial_options
-def on(port: str, baudrate: int, timeout: float, pin: int) -> None:
+def on(port: str, baudrate: int, timeout: float) -> None:
     """Turn on LED."""
     try:
         # click.echo(f"Connecting to Arduino on port {port}...")
         controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
-        controller.led_on(pin)
+        controller.led_on()
         # controller.close()
-        click.echo(f"LED on pin {pin} turned ON")
+        click.echo("LED turned ON")
     except Exception as exc:  # noqa: BLE001
         click.echo(f"Failed to turn on LED: {exc}", err=True)
         raise SystemExit(1)
 
 
 @cli.command()
-@click.option(
-    "--pin",
-    type=int,
-    default=13,
-    help="Arduino pin number (default: 13)",
-)
 @serial_options
-def off(port: str, baudrate: int, timeout: float, pin: int) -> None:
+def off(port: str, baudrate: int, timeout: float) -> None:
     """Turn off LED."""
     try:
         controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
-        controller.led_off(pin)
+        controller.led_off()
         # controller.close()
-        click.echo(f"LED on pin {pin} turned OFF")
+        click.echo("LED turned OFF")
     except Exception as exc:  # noqa: BLE001
         click.echo(f"Failed to turn off LED: {exc}", err=True)
+        raise SystemExit(1)
+
+
+@cli.command()
+@serial_options
+def status(port: str, baudrate: int, timeout: float) -> None:
+    """Query Arduino strobe status."""
+    try:
+        controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
+        info = controller.get_status()
+        for key, value in info.items():
+            click.echo(f"{key}: {value}")
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Failed to get status: {exc}", err=True)
         raise SystemExit(1)
 
 

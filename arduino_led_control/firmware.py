@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -19,7 +20,7 @@ def run_cmd(cmd: List[str]) -> None:
 def auto_detect_port() -> str:
     """Auto-detect Arduino serial port."""
     result = subprocess.run(
-        ["arduino-cli", "board", "list"],
+        ["arduino-cli", "board", "list", "--json"],
         capture_output=True,
         text=True,
         check=False,
@@ -27,16 +28,24 @@ def auto_detect_port() -> str:
     if result.returncode != 0:
         raise RuntimeError("Failed to run 'arduino-cli board list'")
 
-    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
-    if len(lines) <= 1:
+    data = json.loads(result.stdout)
+    detected = data.get("detected_ports", [])
+    if not detected:
         raise RuntimeError("No serial devices found. Connect your Arduino and try again.")
 
-    for line in lines[1:]:
-        port = line.split()[0]
-        if "usb" in port.lower() or "ttyACM" in port or "ttyUSB" in port:
-            return port
+    ch340_port = None # Detect CH340-based boards if no better match is found
+    for entry in detected:
+        if entry.get("matching_boards"):
+            return entry["port"]["address"]
+        
+        props = entry.get("port", {}).get("properties", {})
+        if props.get("vid") == "0x1A86" and props.get("pid") == "0x7523":
+            ch340_port = entry["port"]["address"]
 
-    return lines[1].split()[0]
+    if ch340_port:
+        return ch340_port
+
+    raise RuntimeError("No Arduino board found. Connect your Arduino and try again.")
 
 
 def compile_and_upload(sketch_file: Path, fqbn: str, port: str) -> None:

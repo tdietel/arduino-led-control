@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from click import command
 import serial
 from typing import List, Optional, Tuple
 from serial.tools import list_ports
-import time
-
 
 class ArduinoController:
     """Control LED and other components on Arduino devices via serial communication."""
@@ -66,8 +66,22 @@ class ArduinoController:
                 baudrate=self.baudrate,
                 timeout=self.timeout
             )
-            # time.sleep(2)  # Wait for Arduino to initialize
-            return True
+            
+            max_attempts = 5
+            for attempt in range(max_attempts):
+                # print(f"Attempting to connect to Arduino on {self.port} (attempt {attempt + 1}/{max_attempts})...")
+                self.serial.timeout = 5.0
+                data = self.serial.readline().decode().strip()
+                # print(f"Received on connect: {data}")
+                self.serial.timeout = self.timeout
+
+                if data.endswith("led_control.ino READY"):
+                    self.serial.readall()
+                    self._run_command("CONNECT")
+                    return
+
+            raise ConnectionError(f"Failed to connect to Arduino on {self.port} after {max_attempts} attempts.")    
+        
         except serial.SerialException as e:
             print(f"Failed to connect to Arduino: {e}")
             return False
@@ -89,18 +103,15 @@ class ArduinoController:
         """
         return self.serial is not None and self.serial.is_open
     
-    def led_on(self, pin: int = 13) -> bool:
+    def led_on(self) -> bool:
         """Turn LED on.
-        
-        Args:
-            pin: LED pin number (default: 13)
         
         Returns:
             True if command sent successfully, False otherwise
         """
-        return self._run_command(f"LED_ON:{pin}")
+        return self._run_command(f"ON")
     
-    def led_off(self, pin: int = 13) -> bool:
+    def led_off(self) -> bool:
         """Turn LED off.
         
         Args:
@@ -109,9 +120,9 @@ class ArduinoController:
         Returns:
             True if command sent successfully, False otherwise
         """
-        return self._run_command(f"LED_OFF:{pin}")
+        return self._run_command(f"OFF")
         
-    def start_strobe(self, pulse_width_clk: int) -> bool:
+    def start_strobe(self, frequency: float) -> bool:
         """Start strobe effect on LED.
         
         Args:
@@ -128,7 +139,7 @@ class ArduinoController:
         #     raise ValueError("Pulse width must be positive")
         
         # pulse_width_clk = int(pulse_width_us * (F_CPU / 1_000_000))
-        self._run_command(f"STROBE_START_SINGLE:{pulse_width_clk}")
+        self._run_command(f"STROBE:{int(frequency)}")
 
     def start_double_strobe(self, pulse_width_clk: int, pulse_gap_clk: int, pulse_width2_clk: int) -> bool:
         """Start double strobe effect on LED.
@@ -169,16 +180,44 @@ class ArduinoController:
             # print("Not connected to Arduino")
             # return False
         
-        # try:
         self.serial.write(f"{command}\n".encode())
-        response = self.read_response(timeout=1.0)
-        print(f"Sent command: {command}, Received response: {response}")
-        return response
+        response = self.serial.readline().decode().strip()
+
+        if not response:
+            raise TimeoutError("No response received from Arduino within timeout period.")
+
+        else:
+            print(f"Sent command: {command}, Received response: {response}")
+            fields = response.split("|", 2)
+            if len(fields) < 2:
+                raise RuntimeError(f"Malformed response: {response}")
+            
+            if fields[0] != command:
+                raise RuntimeError(f"Command mismatch: {response}")
+
+            if fields[1] != "OK":
+                raise RuntimeError(f"Runtime error: {response}")
+
+            return '|'.join(fields[2:]) if len(fields) > 2 else None
+
+
+        # response = self.read_response()
+        # return response
         # except serial.SerialException as e:
         #     print(f"Error sending command: {e}")
         #     return False
         #     raise ConnectionError(f"Failed to send command: {e}")
     
+
+    def get_status(self) -> dict:
+        """Query the Arduino for its current strobe status.
+
+        Returns a dict parsed from the firmware JSON response, e.g.::
+
+            {"pattern": "single", "frequency_hz": 1000.0, "pulse_width_clk": 8, "pulse_width_ns": 500.0}
+        """
+        response = self._run_command("STATUS")
+        return json.loads(response)
 
     def read_voltage_current(self) -> Tuple[float, float]:
         """
@@ -200,11 +239,11 @@ class ArduinoController:
                 raise RuntimeError(f"Malformed response: {response}") from e
         raise RuntimeError(f"Device error: {response}")
 
-    def read_response(self, timeout: float = 1.0) -> Optional[str]:
+    def read_response(self) -> Optional[str]:
         """Read response from Arduino, waiting up to timeout seconds.
 
         Args:
-            timeout: Maximum time to wait for a response (seconds, default 1.0)
+            timeout: Maximum time to wait for a response in seconds, or None to block indefinitely.
 
         Returns:
             Response string or None if no data available
@@ -213,17 +252,16 @@ class ArduinoController:
         if not self.is_connected():
             return None
 
-        end_time = time.time() + timeout
         try:
-            while time.time() < end_time:
-                if self.serial.in_waiting > 0:
-                    response = self.serial.readline().decode().strip()
-                    return response
-                time.sleep(0.01)
+            line = self.serial.readline().decode().strip()
+            if not line:
+                raise TimeoutError("No response received from Arduino within timeout period.")
+            return line
         except serial.SerialException as e:
+            if timeout is not None:
+                self.serial.timeout = old_timeout
             print(f"Error reading response: {e}")
-
-        raise TimeoutError("No response received from Arduino within timeout period.")
+            raise TimeoutError("No response received from Arduino within timeout period.")
     
     def __enter__(self):
         """Context manager entry."""
