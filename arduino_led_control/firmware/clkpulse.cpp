@@ -3,7 +3,7 @@
 #include <avr/interrupt.h>
 
 
-clk_pulse_generator::clk_pulse_generator(uint16_t duration, uint8_t high_value, uint8_t low_value) 
+clk_pulse_generator::clk_pulse_generator(uint32_t duration, uint8_t port, uint8_t high_value, uint8_t low_value) 
 : duration(duration), loop_steps(duration/4), high_value(high_value), low_value(low_value)
 {}
 

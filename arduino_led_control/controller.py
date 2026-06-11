@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from click import command
 import serial
 from typing import List, Optional, Tuple
@@ -11,7 +12,7 @@ from serial.tools import list_ports
 class ArduinoController:
     """Control LED and other components on Arduino devices via serial communication."""
     
-    def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout: float = 1.0):
+    def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout: float = 2.0):
         """Initialize Arduino controller.
         
         Args:
@@ -60,30 +61,21 @@ class ArduinoController:
         Returns:
             True if connection successful, False otherwise
         """
+        print("Trying to connect to Arduino on port:", self.port)
         try:
             self.serial = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
-                timeout=self.timeout
-            )
-            
-            max_attempts = 5
-            for attempt in range(max_attempts):
-                # print(f"Attempting to connect to Arduino on {self.port} (attempt {attempt + 1}/{max_attempts})...")
-                self.serial.timeout = 5.0
-                data = self.serial.readline().decode().strip()
-                # print(f"Received on connect: {data}")
-                self.serial.timeout = self.timeout
+                timeout=self.timeout)
+            time.sleep(2)  # Wait for Arduino to reset after opening serial port
 
-                if data.endswith("led_control.ino READY"):
-                    self.serial.readall()
-                    self._run_command("CONNECT")
-                    return
-
-            raise ConnectionError(f"Failed to connect to Arduino on {self.port} after {max_attempts} attempts.")    
+            result = self._run_command("ID")  # Request device ID to confirm connection
+            print(f"Connection test response: {result}")
+            if "Arduino LED Controller" not in result:
+                raise ConnectionError(f"Failed to connect to Arduino on {self.port}: Unexpected response: {result}")    
         
         except serial.SerialException as e:
-            print(f"Failed to connect to Arduino: {e}")
+            print(f"Failed to connect to Arduino: serial exception {e}")
             return False
     
     def disconnect(self) -> None:
@@ -103,6 +95,41 @@ class ArduinoController:
         """
         return self.serial is not None and self.serial.is_open
     
+    def on(self) -> bool:
+        """Turn LED on."""
+        return self.led_on()
+    
+    def off(self) -> bool:
+        """Turn LED off."""
+        return self.led_off()
+
+    def dim(self, level: int) -> bool:
+        """Set LED brightness.
+        
+        Args:
+            level: Brightness level (0-255)
+        
+        Returns:
+            True if command sent successfully, False otherwise
+        """
+        return self._run_command(f"DIM:{level}")
+
+    def set_pulse(self, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
+        """Start pulse effect on LED.
+        
+        Args:
+            pulse_width_clk: Pulse width in clock cycles
+            high_value: High value for the pulse
+            low_value: Low value for the pulse
+        
+        Returns:
+            True if command sent successfully, False otherwise
+        """
+
+        self._run_command(f"PULSE:{pulse_width_clk}:{high_value}:{low_value}")
+        self._run_command(f"STROBE:{int(frequency)}")
+
+
     def led_on(self) -> bool:
         """Turn LED on.
         
@@ -110,7 +137,7 @@ class ArduinoController:
             True if command sent successfully, False otherwise
         """
         return self._run_command(f"ON")
-    
+
     def led_off(self) -> bool:
         """Turn LED off.
         
@@ -121,25 +148,29 @@ class ArduinoController:
             True if command sent successfully, False otherwise
         """
         return self._run_command(f"OFF")
-        
-    def start_strobe(self, frequency: float) -> bool:
-        """Start strobe effect on LED.
+    
+    def set_pulse(self, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
+        """Start pulse effect on LED.
         
         Args:
-            pin: LED pin number
-            frequency: Strobe frequency in Hz
             pulse_width_clk: Pulse width in clock cycles
+            high_value: High value for the pulse
+            low_value: Low value for the pulse
         
         Returns:
             True if command sent successfully, False otherwise
         """
-        # if frequency <= 0:
-        #     raise ValueError("Frequency must be positive")
-        # if pulse_width_us <= 0:
-        #     raise ValueError("Pulse width must be positive")
+        port = 1 # for now, always use port B
+        return self._run_command(f"CLKPULSE:{port}:{pulse_width_clk}:{high_value}:{low_value}")
+
+    def start_strobe(self, frequency: float) -> bool:
+        """Start strobe effect on LED.
         
+        Args:
+            frequency: Strobe frequency in Hz
+        """
         # pulse_width_clk = int(pulse_width_us * (F_CPU / 1_000_000))
-        self._run_command(f"STROBE:{int(frequency)}")
+        return self._run_command(f"STROBE:{int(frequency)}")
 
     def start_double_strobe(self, pulse_width_clk: int, pulse_gap_clk: int, pulse_width2_clk: int) -> bool:
         """Start double strobe effect on LED.
@@ -188,17 +219,17 @@ class ArduinoController:
 
         else:
             print(f"Sent command: {command}, Received response: {response}")
-            fields = response.split("|", 2)
-            if len(fields) < 2:
+            fields = response.split("|")
+            if len(fields) != 3:
                 raise RuntimeError(f"Malformed response: {response}")
             
-            if fields[0] != command:
-                raise RuntimeError(f"Command mismatch: {response}")
+            if fields[2] != command:
+                raise RuntimeError(f"Command mismatch: {response}: expected {command}, got {fields[2]}")
 
             if fields[1] != "OK":
                 raise RuntimeError(f"Runtime error: {response}")
 
-            return '|'.join(fields[2:]) if len(fields) > 2 else None
+            return fields[0]
 
 
         # response = self.read_response()
@@ -217,7 +248,26 @@ class ArduinoController:
             {"pattern": "single", "frequency_hz": 1000.0, "pulse_width_clk": 8, "pulse_width_ns": 500.0}
         """
         response = self._run_command("STATUS")
-        return json.loads(response)
+        status_dict = {}
+        for i in response.split(" "):
+            k,v = i.split("=")
+            status_dict[k] = v
+
+        prescale_map = {0: 1, 1: 8, 2: 64, 3: 256, 4: 1024}
+        if "TCCR1B" in status_dict and "OCR1A" in status_dict:
+            try:
+                tccr1b = int(status_dict["TCCR1B"], 16)
+                ocr1a = int(status_dict["OCR1A"], 16)
+                prescale_bits = tccr1b & 0x07
+                prescale = prescale_map.get(prescale_bits, None)
+                if prescale is not None and ocr1a > 0:
+                    frequency_hz = 16_000_000 / (2 * prescale * ocr1a)
+                    status_dict["base_frequency_hz"] = frequency_hz
+            except Exception as e:
+                print(f"Error parsing strobe parameters: {e}")
+
+
+        return status_dict
 
     def read_voltage_current(self) -> Tuple[float, float]:
         """

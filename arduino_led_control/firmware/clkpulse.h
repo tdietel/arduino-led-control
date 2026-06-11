@@ -6,7 +6,7 @@
 
 class clk_pulse_generator : public generator_base {
   public:
-    clk_pulse_generator(uint16_t duration, uint8_t high_value, uint8_t low_value); 
+    clk_pulse_generator(uint32_t duration, uint8_t port, uint8_t high_value, uint8_t low_value); 
     virtual void generate();
   
   private:
@@ -14,6 +14,8 @@ class clk_pulse_generator : public generator_base {
     volatile uint16_t loop_steps; // number of loop iterations for long pulses (>16clk)
     volatile uint8_t high_value;
     volatile uint8_t low_value;
+    volatile uint8_t port_addr;
+    
 };
 
 #endif

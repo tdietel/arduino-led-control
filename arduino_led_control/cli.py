@@ -127,6 +127,39 @@ def off(port: str, baudrate: int, timeout: float) -> None:
         click.echo(f"Failed to turn off LED: {exc}", err=True)
         raise SystemExit(1)
 
+@cli.command()
+@serial_options
+@click.argument("level", type=int)
+def dim(port: str, baudrate: int, timeout: float, level: int) -> None:
+    """Set LED brightness (0-255)."""
+    if not (0 <= level <= 255):
+        click.echo("Brightness level must be between 0 and 255.", err=True)
+        raise SystemExit(1)
+
+    try:
+        controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
+        controller.dim(level)
+        click.echo(f"LED brightness set to {level}")
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Failed to set brightness: {exc}", err=True)
+        raise SystemExit(1)
+
+@cli.command()
+@serial_options
+@click.argument("frequency", type=float, default=1.0)
+@click.argument("duration", type=int, default=200)
+@click.argument("high", type=int, default=255)
+@click.argument("low", type=int, default=0)
+def strobe(port: str, baudrate: int, timeout: float, frequency: float, duration: int, high: int, low: int) -> None:
+    """Start strobe effect with given frequency (Hz), duration (ms), and high/low brightness levels."""
+    try:
+        controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
+        controller.set_pulse(duration, high, low)
+        controller.start_strobe(frequency)
+        click.echo(f"Strobe started: {frequency} Hz, {duration} ms duration, high={high}, low={low}")
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Failed to start strobe: {exc}", err=True)
+        raise SystemExit(1)
 
 @cli.command()
 @serial_options
