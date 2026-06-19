@@ -33,6 +33,9 @@ dependencies = [
 web = [
     "flask>=2.0",
 ]
+tui = [
+    "colorama>=0.4.0",
+]
 dev = [
     "pytest>=7.0",
     "black>=22.0",
@@ -48,6 +51,7 @@ Issues = "https://github.com/tdietel/arduino-led-control/issues"
 
 [project.scripts]
 ledcontrol = "arduino_led_control.cli:main"
+ledcontrol-tui = "arduino_led_control.tui:main"
 
 [tool.setuptools]
 packages = ["arduino_led_control", "arduino_led_control.firmware"]
