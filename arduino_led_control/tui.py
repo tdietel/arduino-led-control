@@ -12,7 +12,6 @@ except ImportError:
     HAS_COLOR = False
 
 from .controller import ArduinoController
-from .firmware import auto_detect_port
 
 
 def print_header():
@@ -69,23 +68,9 @@ def get_float(prompt, default=None):
 def main():
     """Main TUI loop. Super hacky, but works."""
     print_header()
-    
-    # Auto-detect or prompt for port
+        
     try:
-        port = auto_detect_port()
-        if HAS_COLOR:
-            print(f"{colorama.Fore.GREEN}Auto-detected port: {port}{colorama.Style.RESET_ALL}")
-        else:
-            print(f"Auto-detected port: {port}")
-    except Exception as e:
-        if HAS_COLOR:
-            print(f"{colorama.Fore.RED}Could not auto-detect: {e}{colorama.Style.RESET_ALL}")
-        else:
-            print(f"Could not auto-detect: {e}")
-        port = input("Enter serial port manually: ").strip()
-    
-    try:
-        controller = ArduinoController(port=port, baudrate=115200, timeout=2.0)
+        controller = ArduinoController()
         if HAS_COLOR:
             print(f"{colorama.Fore.GREEN}Connected!{colorama.Style.RESET_ALL}")
         else:
