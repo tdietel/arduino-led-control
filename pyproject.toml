@@ -52,6 +52,7 @@ Issues = "https://github.com/tdietel/arduino-led-control/issues"
 [project.scripts]
 ledcontrol = "arduino_led_control.cli:main"
 ledcontrol-tui = "arduino_led_control.tui:main"
+ledcontrol-firmware = "arduino_led_control.firmware:main"
 
 [tool.setuptools]
 packages = ["arduino_led_control", "arduino_led_control.firmware"]

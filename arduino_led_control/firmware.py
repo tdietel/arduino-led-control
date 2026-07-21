@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import List
 
+import argparse
+
 
 def run_cmd(cmd: List[str]) -> None:
     result = subprocess.run(cmd, text=True)
@@ -53,29 +55,62 @@ def compile_and_upload(sketch_file: Path, fqbn: str, port: str) -> None:
     if not sketch_file.exists():
         raise FileNotFoundError(f"Sketch not found: {sketch_file}")
 
-    sketch_name = sketch_file.stem
-
-    with tempfile.TemporaryDirectory(prefix="arduino_upload_") as tmp:
-        tmp_root = Path(tmp)
-        tmp_sketch_dir = tmp_root / sketch_name
-        tmp_sketch_dir.mkdir(parents=True, exist_ok=True)
-
-        tmp_sketch_file = tmp_sketch_dir / f"{sketch_name}.ino"
-        shutil.copy2(sketch_file, tmp_sketch_file)
-
-        cmd = [
-            "arduino-cli",
-            "compile",
-            "--upload",
-            "-b",
-            fqbn,
-            "-p",
-            port,
-            str(tmp_sketch_dir),
-        ]
-        run_cmd(cmd)
+    # print(f"Compiling and uploading {sketch_file} to {port} (FQBN: {fqbn})...")
+    subprocess.run([
+        "arduino-cli",
+        "compile",
+        "--upload",
+        "-b", fqbn,
+        "-p", port,
+        str(sketch_file),
+    ], text=True, check=True)
 
 
 def check_arduino_cli() -> bool:
     """Check if arduino-cli is installed."""
     return shutil.which("arduino-cli") is not None
+
+
+def main(argv: List[str] | None = None) -> int:
+    """Main entry point for ledcontrol-firmware command."""
+    parser = argparse.ArgumentParser(description="Compile and upload Arduino firmware")
+    parser.add_argument("--sketch", default=None, help="Path to .ino sketch file")
+    parser.add_argument("--fqbn", default="arduino:avr:uno", help="Board FQBN (default: arduino:avr:uno)")
+    parser.add_argument("--port", default=None, help="Serial port (auto-detected if omitted)")
+    args = parser.parse_args(argv)
+
+    if not check_arduino_cli():
+        print("arduino-cli not found. Install it first (e.g. brew install arduino-cli).", file=sys.stderr)
+        return 1
+
+    sketch = Path(args.sketch) if args.sketch else None
+    if sketch is None:
+        package_root = Path(__file__).resolve().parent
+        sketch = package_root / "firmware" / "led_control.ino"
+
+    if not sketch.exists():
+        package_root = Path(__file__).resolve().parent
+        alt_sketch = package_root / "firmware" / "firmware.ino"
+        if alt_sketch.exists():
+            sketch = alt_sketch
+        else:
+            print(f"Sketch not found: {sketch}", file=sys.stderr)
+            return 1
+
+    port = args.port
+    if port is None:
+        try:
+            port = auto_detect_port()
+            print(f"Auto-detected port: {port}")
+        except Exception as exc:
+            print(f"Could not auto-detect port: {exc}", file=sys.stderr)
+            return 2
+
+    try:
+        print(f"Using sketch: {sketch}")
+        compile_and_upload(sketch, args.fqbn, port)
+        print("Firmware upload complete.")
+        return 0
+    except Exception as exc:
+        print(f"Upload failed: {exc}", file=sys.stderr)
+        return 3
