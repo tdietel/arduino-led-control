@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arduino-led-control"
-version = "0.1.2"
+version = "0.2"
 description = "Arduino LED control module with compiled firmware in wheel"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,12 +30,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = [
-    "flask>=2.0",
-]
-tui = [
-    "colorama>=0.4.0",
-]
 dev = [
     "pytest>=7.0",
     "black>=22.0",
@@ -51,7 +45,6 @@ Issues = "https://github.com/tdietel/arduino-led-control/issues"
 
 [project.scripts]
 ledcontrol = "arduino_led_control.cli:main"
-ledcontrol-tui = "arduino_led_control.tui:main"
 
 [tool.setuptools]
 packages = ["arduino_led_control"]

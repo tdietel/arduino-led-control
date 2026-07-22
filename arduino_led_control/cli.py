@@ -1,7 +1,7 @@
 """Command-line frontend for arduino-led-control using cmd2.
 
 Supports both REPL (shell) mode and single-command mode.
-Run with no arguments for interactive shell, or with -c "command args" for direct execution.
+Run with no arguments for interactive shell, or with a command name and arguments for direct execution.
 """
 
 from __future__ import annotations
@@ -165,14 +165,15 @@ class LedControlShell(cmd2.Cmd):
 
 def main() -> int:
     """Main entry point."""
-    # Parse command-line arguments for connection settings and single-command mode
+    # Parse command-line arguments
+    # Connection options are optional, any positional args are the command to run
     parser = argparse.ArgumentParser(
         description="Arduino LED Controller - supports REPL and single-command modes"
     )
     parser.add_argument(
-        "-c", "--command",
-        default=None,
-        help="Single command to execute (e.g., 'on', 'dim 128')",
+        "command",
+        nargs="*",
+        help="Command to execute (e.g., 'on', 'dim 128'). If omitted, starts REPL mode.",
     )
     parser.add_argument(
         "--port",
@@ -192,22 +193,20 @@ def main() -> int:
         help="Serial timeout in seconds (default: 2.0)",
     )
 
-    args, remaining = parser.parse_known_args()
+    args = parser.parse_args()
 
     # Create shell instance
     shell = LedControlShell(port=args.port, baudrate=args.baud, timeout=args.timeout)
 
-    # Single-command mode
+    # Single-command mode: if command positional args are provided
     if args.command:
-        # Parse the command
-        cmd_parts = args.command.split()
-        cmd_name = cmd_parts[0] if cmd_parts else ""
-        cmd_args = " ".join(cmd_parts[1:]) if len(cmd_parts) > 1 else ""
+        cmd_name = args.command[0] if args.command else ""
+        cmd_args = " ".join(args.command[1:]) if len(args.command) > 1 else ""
 
         try:
             # Execute the command
-            result = shell.onecmd(f"{cmd_name} {cmd_args}")
-            return 0 if not result else 0  # onecmd returns True if command was handled
+            shell.onecmd(f"{cmd_name} {cmd_args}")
+            return 0
         except SystemExit:
             return 1
         except Exception as exc:
