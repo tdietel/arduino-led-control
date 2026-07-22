@@ -161,7 +161,7 @@ class ArduinoController:
             True if command sent successfully, False otherwise
         """
         port = 1 # for now, always use port B
-        return self._run_command(f"CLKPULSE:{port}:{pulse_width_clk}:{high_value}:{low_value}")
+        return self._run_command(f"CLKPULSE:{pulse_width_clk}:{port}:{high_value}:{low_value}")
 
     def start_strobe(self, frequency: float) -> bool:
         """Start strobe effect on LED.
