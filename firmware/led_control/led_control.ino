@@ -12,8 +12,8 @@
 generator_base* generator = 0;
 
 void status();
-void startStrobe(uint32_t freq);
-void stopStrobe();
+void start_strobe(uint32_t freq);
+void stop_strobe();
 
 void setup() {
   // Initialize serial communication
@@ -47,27 +47,29 @@ void loop() {
       status();
 
     } else if (strncmp(line, "ON", 2) == 0) {
-      stopStrobe();
+      stop_strobe();
       set_dac(0xFF); 
       Serial.println("|OK|" + String(line));
 
     } else if (strncmp(line, "OFF", 3) == 0) {
-      stopStrobe();
+      stop_strobe();
       set_dac(0x00);
       Serial.println("|OK|" + String(line));
 
     } else if (sscanf(line, "DIM:%d", &args[0]) == 1) {
+      stop_strobe();
       set_dac(args[0]);
       Serial.println("|OK|" + String(line));
 
     } else if (sscanf(line, "STROBE:%d", &args[0]) == 1) {
-      startStrobe(args[0]);
+      start_strobe(args[0]);
       Serial.println("|OK|" + String(line));
 
     } else if (sscanf(line, "CLKPULSE:%d:%d:%d:%d", &args[0], &args[1], &args[2], &args[3]) == 4) {
       delete generator;
       generator = new clk_pulse_generator(args[0], args[1], args[2], args[3]);
       Serial.println("|OK|" + String(line));
+      
     } else {
       Serial.println("Unknown command|ERROR|" + String(line));
     }
@@ -80,7 +82,7 @@ void status() {
   Serial.println("|OK|STATUS");
 }
 
-void startStrobe(uint32_t freq) {
+void start_strobe(uint32_t freq) {
   cli();
 
   TCCR1A = 0;
@@ -109,7 +111,7 @@ void startStrobe(uint32_t freq) {
   sei();
 }
 
-void stopStrobe() {
+void stop_strobe() {
   cli();
   // Disable Timer1 interrupts and stop the timer.
   TIMSK1 = 0;

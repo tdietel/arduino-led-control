@@ -1,123 +1,224 @@
-"""Command-line frontend for arduino-led-control."""
+"""Command-line frontend for arduino-led-control using cmd2.
+
+Supports both REPL (shell) mode and single-command mode.
+Run with no arguments for interactive shell, or with -c "command args" for direct execution.
+"""
 
 from __future__ import annotations
 
-from functools import wraps
+import argparse
+import sys
+from typing import Optional
 
-import click
+import cmd2
 
-from . import ArduinoController
+from .controller import ArduinoController
 
-def serial_options(f):
-    """Decorator to add common serial port options with auto-detection and provide controller."""
-    @click.option(
-        "--port",
-        default=None,
-        help="Serial port (auto-detect if omitted)",
-    )
-    @click.option(
-        "--baudrate",
-        type=int,
-        default=115200,
-        help="Serial baud rate (default: 115200)",
-    )
-    @click.option(
-        "--timeout",
-        type=float,
-        default=1.0,
-        help="Serial timeout in seconds (default: 1.0)",
-    )
-    @wraps(f)
-    def wrapper(port, baudrate, timeout, *args, **kwargs):
-        # Create controller and pass it as the 'controller' argument
+
+class LedControlShell(cmd2.Cmd):
+    """Interactive shell for controlling Arduino LED devices."""
+
+    def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout: float = 2.0):
+        """Initialize the shell with connection parameters."""
+        super().__init__()
+        self.port = port
+        self.baudrate = baudrate
+        self.timeout = timeout
+        self.controller: Optional[ArduinoController] = None
+        self.prompt = "(ledcontrol) "
+        self.intro = "Arduino LED Controller. Type 'help' for available commands."
+
+    def _get_controller(self) -> ArduinoController:
+        """Get or create the controller instance."""
+        if self.controller is None:
+            try:
+                self.controller = ArduinoController(
+                    port=self.port, baudrate=self.baudrate, timeout=self.timeout
+                )
+            except Exception as exc:
+                self.poutput(f"Failed to connect: {exc}", color="red")
+                raise
+        return self.controller
+
+    def do_connect(self, arg: str) -> None:
+        """Connect or reconnect to Arduino. Usage: connect [--port PORT] [--baud BAUD] [--timeout TIMEOUT]"""
+        # Parse arguments
+        parser = argparse.ArgumentParser(description="Connect to Arduino")
+        parser.add_argument("--port", default=None, help="Serial port")
+        parser.add_argument("--baud", type=int, default=None, help="Baud rate")
+        parser.add_argument("--timeout", type=float, default=None, help="Timeout in seconds")
+        parsed = parser.parse_args(arg.split() if arg else [])
+
+        if parsed.port:
+            self.port = parsed.port
+        if parsed.baud:
+            self.baudrate = parsed.baud
+        if parsed.timeout:
+            self.timeout = parsed.timeout
+
+        # Force reconnection
+        if self.controller:
+            self.controller.close()
+            self.controller = None
+
         try:
-            controller = ArduinoController(port=port, baudrate=baudrate, timeout=timeout)
+            self._get_controller()
+            self.poutput(f"Connected to {self.port}", color="green")
         except Exception as exc:
-            click.echo(f"Failed to create controller: {exc}", err=True)
-            raise SystemExit(1)
-        
-        return f(controller=controller, *args, **kwargs)
-    return wrapper
+            self.poutput(f"Connection failed: {exc}", color="red")
+
+    def do_on(self, arg: str) -> None:
+        """Turn LED on."""
+        try:
+            controller = self._get_controller()
+            controller.on()
+            self.poutput("LED turned ON", color="green")
+        except Exception as exc:
+            self.poutput(f"Failed to turn on LED: {exc}", color="red")
+
+    def do_off(self, arg: str) -> None:
+        """Turn LED off."""
+        try:
+            controller = self._get_controller()
+            controller.off()
+            self.poutput("LED turned OFF", color="green")
+        except Exception as exc:
+            self.poutput(f"Failed to turn off LED: {exc}", color="red")
+
+    def do_dim(self, arg: str) -> None:
+        """Set LED brightness. Usage: dim <level> (0-255)"""
+        if not arg:
+            self.poutput("Error: Please specify a brightness level (0-255)", color="red")
+            return
+
+        try:
+            level = int(arg.strip())
+        except ValueError:
+            self.poutput("Error: Brightness level must be an integer", color="red")
+            return
+
+        if not (0 <= level <= 255):
+            self.poutput("Error: Brightness level must be between 0 and 255", color="red")
+            return
+
+        try:
+            controller = self._get_controller()
+            controller.dim(level)
+            self.poutput(f"LED brightness set to {level}", color="green")
+        except Exception as exc:
+            self.poutput(f"Failed to set brightness: {exc}", color="red")
+
+    def do_strobe(self, arg: str) -> None:
+        """Start strobe effect. Usage: strobe <frequency> [duration] [high] [low]"""
+        if not arg:
+            self.poutput("Error: Please specify a frequency", color="red")
+            return
+
+        parts = arg.split()
+        try:
+            frequency = float(parts[0]) if len(parts) > 0 else 1.0
+            duration = int(parts[1]) if len(parts) > 1 else 200
+            high = int(parts[2]) if len(parts) > 2 else 255
+            low = int(parts[3]) if len(parts) > 3 else 0
+        except (ValueError, IndexError):
+            self.poutput("Error: Invalid arguments. Usage: strobe <frequency> [duration] [high] [low]",
+                       color="red")
+            return
+
+        try:
+            controller = self._get_controller()
+            controller.set_pulse(duration, high, low)
+            controller.start_strobe(frequency)
+            duration_s = duration / 16000000
+            if duration_s < 1e-3:
+                duration_str = f"{duration_s * 1e6:.2f} µs"
+            elif duration_s < 1:
+                duration_str = f"{duration_s * 1e3:.2f} ms"
+            else:
+                duration_str = f"{duration_s:.2f} s"
+            self.poutput(f"Strobe started: {frequency} Hz, duration = {duration} clk ={duration_str}, high={high}, low={low}",
+                       color="green")
+        except Exception as exc:
+            self.poutput(f"Failed to start strobe: {exc}", color="red")
 
 
-@click.group()
-def cli() -> None:
-    """Control Arduino LED devices."""
-    pass
+    def do_status(self, arg: str) -> None:
+        """Query Arduino status."""
+        try:
+            controller = self._get_controller()
+            info = controller.get_status()
+            for key, value in info.items():
+                self.poutput(f"{key}: {value}")
+        except Exception as exc:
+            self.poutput(f"Failed to get status: {exc}", color="red")
 
+    def do_quit(self, arg: str) -> bool:
+        """Quit the shell."""
+        if self.controller:
+            self.controller.disconnect()
+        self.poutput("Bye!")
+        return True
 
-@cli.command()
-@serial_options
-def on(controller: ArduinoController) -> None:
-    """Turn on LED."""
-    try:
-        controller.led_on()
-        click.echo("LED turned ON")
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Failed to turn on LED: {exc}", err=True)
-        raise SystemExit(1)
-
-
-@cli.command()
-@serial_options
-def off(controller: ArduinoController) -> None:
-    """Turn off LED."""
-    try:
-        controller.led_off()
-        click.echo("LED turned OFF")
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Failed to turn off LED: {exc}", err=True)
-        raise SystemExit(1)
-
-@cli.command()
-@serial_options
-@click.argument("level", type=int)
-def dim(controller: ArduinoController, level: int) -> None:
-    """Set LED brightness (0-255)."""
-    if not (0 <= level <= 255):
-        click.echo("Brightness level must be between 0 and 255.", err=True)
-        raise SystemExit(1)
-
-    try:
-        controller.dim(level)
-        click.echo(f"LED brightness set to {level}")
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Failed to set brightness: {exc}", err=True)
-        raise SystemExit(1)
-
-@cli.command()
-@serial_options
-@click.argument("frequency", type=float, default=1.0)
-@click.argument("duration", type=int, default=200)
-@click.argument("high", type=int, default=255)
-@click.argument("low", type=int, default=0)
-def strobe(controller: ArduinoController, frequency: float, duration: int, high: int, low: int) -> None:
-    """Start strobe effect with given frequency (Hz), duration (clk cycles), and high/low brightness levels."""
-    try:
-        controller.set_pulse(duration, high, low)
-        controller.start_strobe(frequency)
-        click.echo(f"Strobe started: {frequency} Hz, {duration} clk cycles duration, high={high}, low={low}")
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Failed to start strobe: {exc}", err=True)
-        raise SystemExit(1)
-
-@cli.command()
-@serial_options
-def status(controller: ArduinoController) -> None:
-    """Query Arduino strobe status."""
-    try:
-        info = controller.get_status()
-        for key, value in info.items():
-            click.echo(f"{key}: {value}")
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Failed to get status: {exc}", err=True)
-        raise SystemExit(1)
+    do_exit = do_quit
+    do_q = do_quit
 
 
 def main() -> int:
     """Main entry point."""
+    # Parse command-line arguments for connection settings and single-command mode
+    parser = argparse.ArgumentParser(
+        description="Arduino LED Controller - supports REPL and single-command modes"
+    )
+    parser.add_argument(
+        "-c", "--command",
+        default=None,
+        help="Single command to execute (e.g., 'on', 'dim 128')",
+    )
+    parser.add_argument(
+        "--port",
+        default=None,
+        help="Serial port (auto-detect if omitted)",
+    )
+    parser.add_argument(
+        "--baud", "--baudrate",
+        type=int,
+        default=115200,
+        help="Serial baud rate (default: 115200)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=2.0,
+        help="Serial timeout in seconds (default: 2.0)",
+    )
+
+    args, remaining = parser.parse_known_args()
+
+    # Create shell instance
+    shell = LedControlShell(port=args.port, baudrate=args.baud, timeout=args.timeout)
+
+    # Single-command mode
+    if args.command:
+        # Parse the command
+        cmd_parts = args.command.split()
+        cmd_name = cmd_parts[0] if cmd_parts else ""
+        cmd_args = " ".join(cmd_parts[1:]) if len(cmd_parts) > 1 else ""
+
+        try:
+            # Execute the command
+            result = shell.onecmd(f"{cmd_name} {cmd_args}")
+            return 0 if not result else 0  # onecmd returns True if command was handled
+        except SystemExit:
+            return 1
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    # REPL mode
     try:
-        cli()
+        shell.cmdloop()
         return 0
-    except SystemExit as e:
-        return e.code or 0
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
