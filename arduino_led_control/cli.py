@@ -136,7 +136,7 @@ class LedControlShell(cmd2.Cmd):
                 duration_str = f"{duration_s * 1e3:.2f} ms"
             else:
                 duration_str = f"{duration_s:.2f} s"
-            self.poutput(f"Strobe started: {frequency} Hz, duration = {duration} clk ={duration_str}, high={high}, low={low}",
+            self.poutput(f"Strobe started: {frequency} Hz, duration = {duration} clk = {duration_str}, high={high}, low={low}",
                        color="green")
         except Exception as exc:
             self.poutput(f"Failed to start strobe: {exc}", color="red")
