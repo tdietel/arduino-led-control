@@ -22,6 +22,7 @@ void setup() {
   // Set DAC pins as outputs
   DDRB |= 0x3F;  // D8–D13 as outputs
   DDRC |= 0x03;  // A0–A1 as outputs
+  DDRD |= 0x04;  // D2 as output for ISR active indicator
 
   // Turn of DAC for LED
   set_dac(0);
@@ -120,8 +121,12 @@ void stop_strobe() {
 }
 
 ISR(TIMER1_COMPA_vect) {
+  PORTD |= (1 << PD2); // ISR active indicator -> HIGH
+
   if (generator) {
     generator->generate();
   }
+
+  PORTD &= ~(1 << PD2); // ISR active indicator -> LOW
 }
 
