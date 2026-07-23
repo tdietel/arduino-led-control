@@ -101,7 +101,7 @@ class ArduinoController:
     def dim(self, level: int) -> bool:
         return self._run_command(f"DIM:{level}")
 
-    def strobe(self, frequency: float, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
+    def strobe(self, frequency_hz: float, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
         """Start strobe effect on LED.
         
         Args:
@@ -112,7 +112,7 @@ class ArduinoController:
         """
         port = 1 # for now, always use port B
         self.set_pulse(pulse_width_clk, high_value, low_value)
-        self.start_strobe(frequency)
+        self.start_strobe(frequency_hz)
 
 
     def set_pulse(self, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
