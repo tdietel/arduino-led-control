@@ -130,13 +130,14 @@ void start_strobe(uint32_t freq) {
   TCNT1  = 0;
 
   // Prescalers in descending order; use the largest one where OCR1A fits in 16 bits.
-  static const uint16_t prescalers[] = {1024, 256, 64, 8, 1};
-  static const uint8_t  cs_bits[]    = {0x05, 0x04, 0x03, 0x02, 0x01};
+  static const uint16_t prescalers[] = {1, 8, 64, 256, 1024};
+  static const uint8_t  cs_bits[]    = {0x01, 0x02, 0x03, 0x04, 0x05};
 
   uint8_t  cs  = cs_bits[4];
   uint16_t ocr = 0;
   for (uint8_t i = 0; i < 5; i++) {
     uint32_t ticks = F_CPU / ((uint32_t)prescalers[i] * freq);
+    Serial.print("period="); Serial.print(ticks*prescalers[i]);
     if (ticks >= 1 && ticks <= 65536) {
       cs  = cs_bits[i];
       ocr = (uint16_t)(ticks - 1);
