@@ -114,6 +114,17 @@ class ArduinoController:
         self.set_pulse(pulse_width_clk, high_value, low_value)
         self.start_strobe(frequency_hz)
 
+    def pcm(self, frequency_hz: float, sample_period_clk: int, pcmdata: bytes) -> bool:
+        """Start strobe effect on LED.
+        
+        Args:
+            frequency: Strobe frequency in Hz
+            sample_period_clk: number of clock cycles between samples, e.g. 16 -> 1 MHz
+            pcmdata: bytes array of values to be sent to DAC
+        """
+        self._run_command(f"PCM:{sample_period_clk}:{len(pcmdata)}", pcmdata)
+        self.start_strobe(frequency_hz)
+
 
     def set_pulse(self, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
         """Configure pulse effect on LED.
@@ -136,7 +147,7 @@ class ArduinoController:
         # pulse_width_clk = int(pulse_width_us * (F_CPU / 1_000_000))
         self._run_command(f"STROBE:{int(frequency)}")
 
-    def _run_command(self, command: str) -> bool:
+    def _run_command(self, command: str, payload: bytes = bytes([])) -> bool:
         """Send command to Arduino.
         
         Args:
@@ -151,6 +162,9 @@ class ArduinoController:
             # return False
         
         self.serial.write(f"{command}\n".encode())
+        if len(payload) > 0:
+            self.serial.write(payload)
+
         response = self.serial.readline().decode().strip()
 
         if not response:

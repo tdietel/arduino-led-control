@@ -141,6 +141,33 @@ class LedControlShell(cmd2.Cmd):
         except Exception as exc:
             self.poutput(f"Failed to start strobe: {exc}", color="red")
 
+    def do_pcmtest(self, arg: str) -> None:
+        """Start PCM pulse generation. Usage: pcm <frequency> [sample rate]
+        
+        Note: this test function sends a predefined PCM pulse."""
+        if not arg:
+            self.poutput("Error: Please specify a frequency", color="red")
+            return
+
+        parts = arg.split()
+        try:
+            frequency = float(parts[0]) if len(parts) > 0 else 1.0
+            sample_period_clk = int(parts[1]) if len(parts) > 1 else 16
+        except (ValueError, IndexError):
+            self.poutput("Error: Invalid arguments. Usage: strobe <frequency> [sample rate]",
+                       color="red")
+            return
+
+        pcmdata = bytes([255,255,0,255,255,255,0,0,0,255,255,0])
+
+        try:
+            controller = self._get_controller()
+            controller.pcm(frequency, sample_period_clk, pcmdata)
+            self.poutput(f"PCM started: {frequency} Hz, {len(pcmdata)} samples at {float(sample_period_clk) / 16.0}",
+                       color="green")
+        except Exception as exc:
+            self.poutput(f"Failed to start PCM: {exc}", color="red")
+
 
     def do_status(self, arg: str) -> None:
         """Query Arduino status."""

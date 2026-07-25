@@ -9,7 +9,32 @@
 #include "generator.h"
 #include "clkpulse.h"
 
+#define STROBE_MODE_OFF 0
+#define STROBE_MODE_GENERATOR 1
+#define STROBE_MODE_CLKPULSE 2
+#define STROBE_MODE_PCM 3
+uint8_t strobe_mode;
+
+struct pcm_param_t {
+  size_t nsamples;
+  uint8_t rate;
+};
+
+union {
+  struct {
+    uint16_t width;
+    uint8_t on_level;
+    uint8_t off_level;
+  } clkpulse;
+
+  pcm_param_t pcm;
+} param;
+
+
 generator_base* generator = 0;
+
+static const size_t bufsize = 1024;
+uint8_t databuffer[bufsize];
 
 void status();
 void start_strobe(uint32_t freq);
@@ -64,9 +89,23 @@ void loop() {
 
     } else if (sscanf(line, "STROBE:%d", &args[0]) == 1) {
       start_strobe(args[0]);
+      // Serial.print(F("|OK|")); Serial.println(line);
+      Serial.println("|OK|" + String(line));
+
+    } else if (sscanf(line, "PCM:%d:%d", &args[0], &args[1]) == 2) {
+      strobe_mode = STROBE_MODE_PCM;
+      param.pcm.nsamples = args[1];
+      param.pcm.rate = 16;  // hardcode to 1 sample per 16 clock cycles - 1 MHz 
+
+      Serial.readBytes(databuffer, param.pcm.nsamples);
+
+      Serial.print("pcm port=");
+      Serial.print(args[0]);
+      Serial.print(" rate="); Serial.print(param.pcm.rate);
       Serial.println("|OK|" + String(line));
 
     } else if (sscanf(line, "CLKPULSE:%d:%d:%d:%d", &args[0], &args[1], &args[2], &args[3]) == 4) {
+      strobe_mode = STROBE_MODE_GENERATOR;
       delete generator;
       generator = new clk_pulse_generator(args[0], args[1], args[2], args[3]);
       Serial.println("|OK|" + String(line));
@@ -123,9 +162,35 @@ void stop_strobe() {
 ISR(TIMER1_COMPA_vect) {
   PORTD |= (1 << PD2); // ISR active indicator -> HIGH
 
-  if (generator) {
-    generator->generate();
+  switch (strobe_mode) {
+    case(STROBE_MODE_GENERATOR):
+      if (generator) {
+        generator->generate();
+      }
+      break;
+
+    case(STROBE_MODE_PCM):
+      for(size_t i=0; i<param.pcm.nsamples;++i) {
+        set_dac(databuffer[i]);
+      }
+      break;
   }
+
+  // volatile uint16_t high_value = 255;
+  // volatile uint16_t low_value = 0;
+
+  // __asm__ __volatile__(
+  //   "out %[port], %[h]\n\t"
+  //   "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+  //   "out %[port], %[l]\n\t"
+  //   :
+  //   : [port] "I" (_SFR_IO_ADDR(PORTB)), [h] "r" (high_value), [l] "r" (low_value)
+  // );
+
+  // __asm__ __volatile__(
+  //   "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t"
+  // );
+
 
   PORTD &= ~(1 << PD2); // ISR active indicator -> LOW
 }
