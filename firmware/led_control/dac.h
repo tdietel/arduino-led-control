@@ -2,7 +2,7 @@
 #define DAC_H
 
 inline void set_dac(uint8_t val) {
-    PORTB = (PORTB & 0xC0) | (val >> 2);    // bits 7..2 → PB5..PB0
+    PORTB = (val >> 2);    // bits 7..2 → PB5..PB0; PB7/PB6 are used by XTAL, ignore GPIO 
     PORTC = (PORTC & 0xFC) | (val & 0x03);  // bits 1..0 → PC1..PC0
 }
 

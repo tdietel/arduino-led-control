@@ -122,28 +122,32 @@ void status() {
   Serial.println("|OK|STATUS");
 }
 
-void start_strobe(uint32_t freq) {
+void start_strobe(float freq) {
   cli();
 
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
 
-  // Prescalers in descending order; use the largest one where OCR1A fits in 16 bits.
+  // Prescalers in ascending order; use the smalles one for optimal resolution.
   static const uint16_t prescalers[] = {1, 8, 64, 256, 1024};
-  static const uint8_t  cs_bits[]    = {0x01, 0x02, 0x03, 0x04, 0x05};
 
-  uint8_t  cs  = cs_bits[4];
-  uint16_t ocr = 0;
+  uint8_t  cs  = 0; // prescaler index (1-based)
+  uint16_t ocr = 0; // Output Compare Register value
   for (uint8_t i = 0; i < 5; i++) {
-    uint32_t ticks = F_CPU / ((uint32_t)prescalers[i] * freq);
-    Serial.print("period="); Serial.print(ticks*prescalers[i]);
+    uint32_t ticks = uint32_t(float(F_CPU) / (float(prescalers[i]) * freq));
     if (ticks >= 1 && ticks <= 65536) {
-      cs  = cs_bits[i];
+      cs  = i + 1; // cs_bits[i];
       ocr = (uint16_t)(ticks - 1);
       break;
     }
   }
+
+  float f = float(F_CPU) / (float(ocr+1) * float(prescalers[cs-1]));
+
+  Serial.print("ticks="); Serial.print(ocr+1);
+  Serial.print(" prescaler="); Serial.print(prescalers[cs-1]);
+  Serial.print(" f="); Serial.print(f);
 
   OCR1A  = ocr;
   TCCR1B = (1 << WGM12) | cs;

@@ -111,11 +111,11 @@ class ArduinoController:
             low_value: Low value for the pulse        
         """
         port = 1 # for now, always use port B
-        self.set_pulse(pulse_width_clk, high_value, low_value)
+        self._run_command(f"CLKPULSE:{pulse_width_clk}:{port}:{high_value}:{low_value}")
         self.start_strobe(frequency_hz)
 
     def pcm(self, frequency_hz: float, sample_period_clk: int, pcmdata: bytes) -> bool:
-        """Start strobe effect on LED.
+        """Start strobe effect using PCM data on LED.
         
         Args:
             frequency: Strobe frequency in Hz
@@ -126,17 +126,6 @@ class ArduinoController:
         self.start_strobe(frequency_hz)
 
 
-    def set_pulse(self, pulse_width_clk: int, high_value: int, low_value: int) -> bool:
-        """Configure pulse effect on LED.
-        
-        Args:
-            pulse_width_clk: Pulse width in clock cycles
-            high_value: High value for the pulse
-            low_value: Low value for the pulse
-        
-        """
-        port = 1 # for now, always use port B
-        self._run_command(f"CLKPULSE:{pulse_width_clk}:{port}:{high_value}:{low_value}")
 
     def start_strobe(self, frequency: float) -> bool:
         """Start strobe effect on LED.
@@ -145,7 +134,7 @@ class ArduinoController:
             frequency: Strobe frequency in Hz
         """
         # pulse_width_clk = int(pulse_width_us * (F_CPU / 1_000_000))
-        self._run_command(f"STROBE:{int(frequency)}")
+        self._run_command(f"STROBE:{frequency}")
 
     def _run_command(self, command: str, payload: bytes = bytes([])) -> bool:
         """Send command to Arduino.

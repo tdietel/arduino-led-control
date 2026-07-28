@@ -126,9 +126,9 @@ class LedControlShell(cmd2.Cmd):
             return
 
         try:
+            # print(f"Starting strobe: frequency={frequency} Hz, duration={duration} clk, high={high}, low={low}")
             controller = self._get_controller()
-            controller.set_pulse(duration, high, low)
-            controller.start_strobe(frequency)
+            controller.strobe(frequency, duration, high, low)
             duration_s = duration / 16000000
             if duration_s < 1e-3:
                 duration_str = f"{duration_s * 1e6:.2f} µs"
