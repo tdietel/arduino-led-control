@@ -37,7 +37,7 @@ static const size_t bufsize = 1024;
 uint8_t databuffer[bufsize];
 
 void status();
-void start_strobe(uint32_t freq);
+void start_strobe(float freq);
 void stop_strobe();
 
 void setup() {
@@ -87,9 +87,12 @@ void loop() {
       set_dac(args[0]);
       Serial.println("|OK|" + String(line));
 
-    } else if (sscanf(line, "STROBE:%d", &args[0]) == 1) {
-      start_strobe(args[0]);
-      // Serial.print(F("|OK|")); Serial.println(line);
+    } else if (strncmp(line, "STROBE:", 7) == 0) {
+      // Extract frequency from the command.
+      // Default libc sscanf does not support %f, so we use atof() instead.
+      char* freq_str = line + 7;
+      float freq = atof(freq_str);
+      start_strobe(freq);
       Serial.println("|OK|" + String(line));
 
     } else if (sscanf(line, "PCM:%d:%d", &args[0], &args[1]) == 2) {
@@ -175,8 +178,20 @@ ISR(TIMER1_COMPA_vect) {
       break;
 
     case(STROBE_MODE_PCM):
-      for(size_t i=0; i<param.pcm.nsamples;++i) {
-        set_dac(databuffer[i]);
+      const uint8_t *p = databuffer;
+      const uint8_t *end = databuffer + param.pcm.nsamples;
+
+      while (p + 4 <= end) {
+        PORTB = p[0];
+        PORTB = p[1];
+        PORTB = p[2];
+        PORTB = p[3];
+        p += 4;
+      }
+
+      // tail
+      while (p < end) {
+        PORTB = *p++;
       }
       break;
   }
